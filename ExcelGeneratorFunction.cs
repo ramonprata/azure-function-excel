@@ -30,13 +30,15 @@ namespace AzureFunctionsDemo
         log.LogInformation("C# HTTP trigger function processed a request.");
 
         string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+        string idUsuario = req.Headers["IdUsuario"];
+        string indicador = req.Headers["Indicador"];
         dynamic data = JsonConvert.DeserializeObject(requestBody);
 
         var repository = new CommandRepository();
         IEnumerable<Command> result = await repository.GetCommandsThroughFunction(log);
         string[] nomeAtributosExibir = new string[] { "Id", "HowTo", "Line", "Plataform" };
         MemoryStream planilha = ExcelUtil.ObterPlanilhaPorLista(result, "Commands", "How to", nomeAtributosExibir, 0);
-        var arquivoEnviado = await Upload(planilha, "Commands.xls", "application/vnd.ms-excel");
+        var arquivoEnviado = await Upload(planilha, "Commands.xls", "application/vnd.ms-excel", idUsuario, indicador);
         return new OkObjectResult(arquivoEnviado);
       }
       catch (System.Exception e)
@@ -47,7 +49,7 @@ namespace AzureFunctionsDemo
 
     }
 
-    private static async Task<string> Upload(MemoryStream file, string fileName, string fileType)
+    private static async Task<string> Upload(MemoryStream file, string fileName, string fileType, string idUsuario, string indicador)
     {
       var accountName = "devstoreaccount1";
       var accountKey = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
@@ -57,9 +59,12 @@ namespace AzureFunctionsDemo
       var storageAccount = new CloudStorageAccount(storageCredentials, blobEndpoint, null, null, null);
       var blobAzure = storageAccount.CreateCloudBlobClient();
       var container = blobAzure.GetContainerReference(containerName);
-
       var blob = container.GetBlockBlobReference(fileName);
+
+      blob.Metadata["IdUsuario"] = idUsuario;
+      blob.Metadata["Indicador"] = indicador;
       blob.Properties.ContentType = fileType;
+
       await blob.UploadFromByteArrayAsync(file.ToArray(), 0, file.ToArray().Length);
       return blob.SnapshotQualifiedStorageUri.PrimaryUri.ToString();
     }
